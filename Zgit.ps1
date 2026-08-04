@@ -50,14 +50,14 @@
     与 -Add 配合：提交后不推送父仓库远程。
 
 .EXAMPLE
-    .\sync-all.ps1
-    .\sync-all.ps1 -SkipParentPull
-    .\sync-all.ps1 -Submodule firmware
-    .\sync-all.ps1 -Submodule host-app,firmware
-    .\sync-all.ps1 -DryRun
-    .\sync-all.ps1 -Add -AddPath C:\work\host-app
-    .\sync-all.ps1 -Add -AddPath C:\work\host-app -NoPush
-    .\sync-all.ps1 -build   # 同事在自己子仓库目录运行，自动注册进父仓库
+    .\Zgit.ps1
+    .\Zgit.ps1 -SkipParentPull
+    .\Zgit.ps1 -Submodule firmware
+    .\Zgit.ps1 -Submodule host-app,firmware
+    .\Zgit.ps1 -DryRun
+    .\Zgit.ps1 -Add -AddPath C:\work\host-app
+    .\Zgit.ps1 -Add -AddPath C:\work\host-app -NoPush
+    .\Zgit.ps1 -build   # 同事在自己子仓库目录运行，自动注册进父仓库
 #>
 [CmdletBinding()]
 param(
@@ -306,7 +306,7 @@ if ($Add) {
                 Write-Err "  1) 请父仓库维护者把您添加为协作者，获得推送权限后重新运行本脚本；"
                 Write-Err '     （GitHub 仓库: Settings -> Collaborators -> Add people；组织仓库由管理员在仓库权限中授权）'
                 Write-Err "  2) 联系父仓库维护者，提供本子仓库信息（URL: $url，分支: $branch），"
-                Write-Err '     由维护者在本地父仓库中运行：.\sync-all.ps1 -Add -AddPath <子仓库本地路径> 完成注册；'
+                Write-Err '     由维护者在本地父仓库中运行：.\Zgit.ps1 -Add -AddPath <子仓库本地路径> 完成注册；'
                 Write-Err '  3) 自行克隆父仓库、手动执行 submodule 注册并提交，再通过 Pull Request 提交给维护者合并。'
                 exit 1
             }
