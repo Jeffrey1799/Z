@@ -1,0 +1,15 @@
+[submodule "host-app"]
+	path = host-app
+	url = https://github.com/Jeffrey1799/host-app.git
+	branch = main
+	ignore = all
+[submodule "firmware"]
+	path = firmware
+	url = https://github.com/Jeffrey1799/firmware.git
+	branch = main
+	ignore = all
+[submodule "algorithm"]
+	path = algorithm
+	url = https://github.com/Jeffrey1799/algorithm.git
+	branch = main
+	ignore = all
