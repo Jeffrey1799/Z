@@ -285,17 +285,31 @@ if ($Add) {
 
         if ($NoPush) {
             Write-Warn '已指定 -NoPush，未推送父仓库。如需发布：git push'
+            if ($tmpParent) {
+                Write-Warn '注意：父仓库为临时克隆，脚本退出时将清理该目录，未推送的提交不会保留。'
+                Write-Warn '如需手动推送，请勿使用 -NoPush（直接重新运行即可默认推送），或在本地父仓库中使用本命令。'
+            }
         } else {
             Write-Step '推送父仓库...'
             try {
                 Invoke-Git @('push')
+                Write-Ok '已推送到父仓库远程。'
             } catch {
                 Write-Err "推送父仓库失败：$($_.Exception.Message)"
-                Write-Err '若您对父仓库没有推送权限，请基于该提交创建 Pull Request，'
-                Write-Err '或联系父仓库维护者执行 git push。'
+                Write-Err ''
+                Write-Err '【本次操作结果】子模块已在本地完成注册和提交，但【未能发布】到父仓库远程。'
+                Write-Err '（临时克隆的父仓库目录将被清理，父仓库远程未发生任何变化。）'
+                Write-Err ''
+                Write-Err '【最常见原因】您对父仓库没有推送（push）权限。'
+                Write-Err ''
+                Write-Err '【解决办法，任选其一】'
+                Write-Err "  1) 请父仓库维护者把您添加为协作者，获得推送权限后重新运行本脚本；"
+                Write-Err '     （GitHub 仓库: Settings -> Collaborators -> Add people；组织仓库由管理员在仓库权限中授权）'
+                Write-Err "  2) 联系父仓库维护者，提供本子仓库信息（URL: $url，分支: $branch），"
+                Write-Err '     由维护者在本地父仓库中运行：.\sync-latest.ps1 -Add -AddPath <子仓库本地路径> 完成注册；'
+                Write-Err '  3) 自行克隆父仓库、手动执行 submodule 注册并提交，再通过 Pull Request 提交给维护者合并。'
                 exit 1
             }
-            Write-Ok '已推送到父仓库远程。'
         }
 
         Write-Output ''
