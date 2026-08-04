@@ -23,19 +23,64 @@
 .PARAMETER DryRun
     只显示将要执行的操作，不修改工作区与任何 git 引用。
 
+.PARAMETER Add
+    添加子仓库模式（别名 -build）。把指定本地 Git 仓库接入父仓库成为子模块：
+    自动读取其 origin 的 URL 与当前分支，执行 submodule add，配置 branch / ignore=all 并提交。
+    父仓库来源：优先使用当前目录树内找到的父仓库；否则克隆脚本顶部 $ParentRepoUrl 配置的地址。
+    提交后默认推送父仓库远程；加 -NoPush 跳过推送。
+
+.PARAMETER AddPath
+    与 -Add 配合：指定子仓库本地路径（绝对或相对路径）。
+    省略时使用当前目录（分发场景：同事在自己的子仓库目录里运行）。
+
+.PARAMETER AddName
+    与 -Add 配合：指定子模块名称（默认取子仓库目录名）。
+
+.PARAMETER AddBranch
+    与 -Add 配合：指定跟踪分支（默认取子仓库当前分支）。
+
+.PARAMETER AddModulePath
+    与 -Add 配合：指定子模块在父仓库中的路径（默认与名称相同）。
+
+.PARAMETER ParentUrl
+    与 -Add 配合：指定父仓库地址（优先级高于脚本顶部的 $ParentRepoUrl 配置）。
+    用于覆盖默认配置或测试。
+
+.PARAMETER NoPush
+    与 -Add 配合：提交后不推送父仓库远程。
+
 .EXAMPLE
     .\sync-latest.ps1
     .\sync-latest.ps1 -SkipParentPull
     .\sync-latest.ps1 -Submodule firmware
     .\sync-latest.ps1 -Submodule host-app,firmware
     .\sync-latest.ps1 -DryRun
+    .\sync-latest.ps1 -Add -AddPath C:\work\host-app
+    .\sync-latest.ps1 -Add -AddPath C:\work\host-app -NoPush
+    .\sync-latest.ps1 -build   # 同事在自己子仓库目录运行，自动注册进父仓库
 #>
 [CmdletBinding()]
 param(
     [switch]$SkipParentPull,
     [string[]]$Submodule = @(),
-    [switch]$DryRun
+    [switch]$DryRun,
+    [Alias('build')]
+    [switch]$Add,
+    [string]$AddPath,
+    [string]$AddName,
+    [string]$AddBranch,
+    [string]$AddModulePath,
+    [string]$ParentUrl,
+    [switch]$NoPush
 )
+
+# ===================== 配置区（分发前请修改） =====================
+# 父仓库地址：同事在自己的子仓库里运行 -Add 时，脚本会克隆该地址的父仓库，
+# 把子仓库注册进去（submodule add + branch/ignore 配置 + 提交 + 推送）。
+# 留空：仅在脚本位于父仓库目录树内时可用（本地维护者场景）。
+$ParentRepoUrl = 'https://github.com/Jeffrey1799/Z.git'
+# =================================================================
+if ($ParentUrl) { $ParentRepoUrl = $ParentUrl }
 
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
@@ -86,8 +131,187 @@ while ($true) {
         break
     }
     $parentDir = Split-Path $dir -Parent
-    if ($parentDir -eq $dir) { break }
+    if (-not $parentDir -or $parentDir -eq $dir) { break }
     $dir = $parentDir
+}
+
+# ---------- 0.5 添加子仓库模式（-Add / -build） ----------
+if ($Add) {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Err '未检测到 Git。请先安装 Git for Windows：https://git-scm.com/download/win'
+        exit 1
+    }
+
+    # 解析子仓库源路径（-AddPath 优先，否则当前目录）
+    $src = $null
+    if ($AddPath) {
+        $resolved = Resolve-Path $AddPath -ErrorAction SilentlyContinue
+        if ($resolved) { $src = $resolved.Path }
+    } else {
+        $src = (Get-Location).Path
+    }
+    if (-not $src -or -not (Test-Path $src)) {
+        Write-Err "无法解析子仓库路径：'$AddPath'。请用 -AddPath 指定本地子仓库目录。"
+        exit 1
+    }
+    $src = [System.IO.Path]::GetFullPath($src)
+
+    # 确认是 Git 仓库
+    & git -C $src rev-parse --git-dir 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "目标目录不是 Git 仓库：$src"
+        exit 1
+    }
+
+    # 自动识别 origin URL（子仓库须已推到远程并配置 origin）
+    $url = (& git -C $src remote get-url origin 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $url) {
+        Write-Err "子仓库 '$src' 未配置 origin 远程。请先在子仓库中执行："
+        Write-Err '    git remote add origin <仓库URL>'
+        Write-Err '    git push -u origin <分支>'
+        exit 1
+    }
+
+    # 自动识别跟踪分支
+    $branch = $AddBranch
+    if (-not $branch) {
+        $branch = (& git -C $src rev-parse --abbrev-ref HEAD)
+        if ($branch -eq 'HEAD') {
+            Write-Err '无法自动识别分支：源仓库处于 detached HEAD。请用 -AddBranch <分支> 指定。'
+            exit 1
+        }
+    }
+
+    # 名称与父仓库内路径
+    $leaf  = Split-Path $src -Leaf
+    $name  = if ($AddName)       { $AddName }       else { $leaf }
+    $mpath = if ($AddModulePath) { $AddModulePath } else { $leaf }
+
+    Write-Ok "子仓库源: $src"
+    Write-Ok "URL     : $url"
+    Write-Ok "分支    : $branch"
+    Write-Ok "名称    : $name"
+    Write-Ok "路径    : $mpath"
+
+    # 确定父仓库：优先当前目录树内定位的；否则克隆配置的父仓库地址
+    $parent = $null
+    $tmpParent = $null
+    if ($root) {
+        $parent = $root
+        if ($src -eq $parent) {
+            Write-Err '不能把父仓库本身添加为子模块。请指定另一个独立仓库目录（-AddPath）。'
+            exit 1
+        }
+        Write-Ok "父仓库（本地定位）: $parent"
+    } elseif ($ParentRepoUrl) {
+        $tmpParent = Join-Path $env:TEMP ("z-parent-" + [guid]::NewGuid().ToString('N'))
+        Write-Step "克隆父仓库到临时目录（$ParentRepoUrl）..."
+        try {
+            Invoke-Git @('clone','--quiet',$ParentRepoUrl,$tmpParent)
+        } catch {
+            Write-Err "克隆父仓库失败：$($_.Exception.Message)"
+            Write-Err '请检查脚本顶部 $ParentRepoUrl 配置，或确认网络与凭据可用。'
+            exit 1
+        }
+        $parent = $tmpParent
+        Write-Ok "父仓库（临时克隆）: $parent"
+    } else {
+        Write-Err '未找到父仓库（当前目录不在父仓库目录树内），且未配置脚本顶部的 $ParentRepoUrl。'
+        Write-Err '两种方式任选其一：'
+        Write-Err '    1) 维护者在脚本顶部把 $ParentRepoUrl 配置为父仓库地址，再把脚本分发给同事；'
+        Write-Err '    2) 在父仓库根目录运行本脚本，用 -AddPath 指定子仓库目录。'
+        exit 1
+    }
+
+    # 在父仓库中执行注册
+    Push-Location $parent
+    try {
+        $dup = (& git config -f .gitmodules --get-regexp "^submodule\.$([regex]::Escape($name))\.path$" 2>$null)
+        if ($dup) {
+            Write-Err "子模块 '$name' 已存在于父仓库 .gitmodules。"
+            exit 1
+        }
+        $tracked = (& git ls-files --stage -- $mpath)
+        if ($tracked) {
+            Write-Err "父仓库中路径 '$mpath' 已被跟踪，请改用 -AddModulePath 指定其他路径。"
+            exit 1
+        }
+        $targetDir = Join-Path $parent $mpath
+        if (Test-Path $targetDir) {
+            $kids = @(Get-ChildItem $targetDir -Force | Where-Object { $_.Name -ne '.git' })
+            if ($kids.Count -gt 0) {
+                Write-Err "父仓库中已存在非空目录 '$mpath'。请先移除，或改用 -AddModulePath 指定其他路径。"
+                exit 1
+            }
+        }
+
+        if ($DryRun) {
+            Write-Output ''
+            Write-Output '========== Dry Run：将执行以下操作（未做任何修改） =========='
+            Write-Output "  git submodule add --name $name $url $mpath"
+            Write-Output "  git config -f .gitmodules submodule.$name.branch $branch"
+            Write-Output "  git config -f .gitmodules submodule.$name.ignore all"
+            Write-Output "  git add .gitmodules $mpath"
+            Write-Output "  git commit -m \"chore: add submodule $name\""
+            if (-not $NoPush) { Write-Output '  git push  （推送到父仓库远程）' }
+            Write-Ok 'Dry Run 结束：未执行任何修改。'
+            exit 0
+        }
+
+        Write-Step "执行 git submodule add（名称 $name，路径 $mpath）..."
+        try {
+            Invoke-Git @('submodule','add','--name',$name,$url,$mpath)
+        } catch {
+            Write-Err "git submodule add 失败：$($_.Exception.Message)"
+            Write-Err '常见原因：URL 无法访问、目录非空、或 git 安全策略禁止该协议。'
+            exit 1
+        }
+        Invoke-Git @('config','-f','.gitmodules',"submodule.$name.branch",$branch)
+        Invoke-Git @('config','-f','.gitmodules',"submodule.$name.ignore",'all')
+        git add .gitmodules $mpath
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err 'git add 失败。'
+            exit 1
+        }
+        Write-Step '提交父仓库...'
+        try {
+            Invoke-Git @('commit','-m',"chore: add submodule $name")
+        } catch {
+            Write-Err "提交失败：$($_.Exception.Message)"
+            Write-Err '请确认父仓库（或全局）已配置 user.name / user.email。'
+            exit 1
+        }
+        Write-Ok "已提交：chore: add submodule $name"
+
+        if ($NoPush) {
+            Write-Warn '已指定 -NoPush，未推送父仓库。如需发布：git push'
+        } else {
+            Write-Step '推送父仓库...'
+            try {
+                Invoke-Git @('push')
+            } catch {
+                Write-Err "推送父仓库失败：$($_.Exception.Message)"
+                Write-Err '若您对父仓库没有推送权限，请基于该提交创建 Pull Request，'
+                Write-Err '或联系父仓库维护者执行 git push。'
+                exit 1
+            }
+            Write-Ok '已推送到父仓库远程。'
+        }
+
+        Write-Output ''
+        Write-Output '========== 添加完成 =========='
+        Write-Output "子模块 '$name' 已接入父仓库："
+        Write-Output "  远程: $url"
+        Write-Output "  分支: $branch"
+        Write-Output '子仓库负责人后续只需维护自己的仓库并 push，父仓库无需再操作。'
+        exit 0
+    } finally {
+        Pop-Location
+        if ($tmpParent -and (Test-Path $tmpParent)) {
+            Remove-Item -LiteralPath $tmpParent -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $tmpParent) { Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。" }
+        }
+    }
 }
 
 if (-not $root) {
