@@ -117,15 +117,15 @@ if ($h) {
 ================================================================================
 
 【用法格式】
-  .\zgit.ps1 [-pull] [-Submodule <名/路径>] [-SkipParentPull] [-DryRun]
-  .\zgit.ps1 -Add [-AddPath <路径>] [-AddName <名称>] [-AddBranch <分支>] [-NoPush]
-  .\zgit.ps1 -rm -Submodule <名/路径> [-NoPush] [-DryRun]
+  .\zgit.ps1 -pull [-Submodule <名/路径>] [-SkipParentPull] [-DryRun]
+  .\zgit.ps1 -add [-AddPath <路径>] [-AddName <名称>] [-AddBranch <分支>] [-NoPush]
+  .\zgit.ps1 -rm [-Submodule <名/路径>] [-NoPush] [-DryRun]
   .\zgit.ps1 -help
 
 【核心模式】
   -pull                一键同步模式（必需显式指定）。将各子仓库同步更新到各自跟踪
                        分支的远程最新版本，并保持在正常本地分支上。
-  -Add (别名: -build)  接入新子仓库模式。自动读取目标仓库 origin 与当前分支，在
+  -add (别名: -build)  接入新子仓库模式。自动读取目标仓库 origin 与当前分支，在
                        父仓库中注册 Submodule、配置跟踪分支与 ignore=all 并提交。
   -rm (别名: -Remove)  解绑子仓库模式。仅删除父仓库中对子仓库的 Git 跟踪指针，
                        【绝对不会删除】本地磁盘中的实际代码文件。
@@ -860,6 +860,7 @@ try {
 finally {
     Pop-Location
 }
+
 
 
 
