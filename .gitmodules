@@ -13,3 +13,8 @@
 	url = https://github.com/Jeffrey1799/algorithm.git
 	branch = main
 	ignore = all
+[submodule "222"]
+	path = 222
+	url = https://github.com/Jeffrey1799/222.git
+	branch = main
+	ignore = all
