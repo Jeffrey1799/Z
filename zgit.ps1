@@ -1,4 +1,4 @@
-﻿#requires -Version 5.1
+#requires -Version 5.1
 <#
 .SYNOPSIS
     一键同步父仓库内所有子仓库到各自配置分支的远程最新版本。
@@ -79,6 +79,7 @@ param(
     [switch]$DryRun,
     [Alias('build')]
     [switch]$add,
+    [Parameter(Position=0)]
     [Alias('Path', 'p')]
     [string]$AddPath,
     [Alias('Name', 'n')]
@@ -118,7 +119,7 @@ if ($h) {
 
 【用法格式】
   .\zgit.ps1 -pull [-Submodule <名/路径>] [-SkipParentPull] [-DryRun]
-  .\zgit.ps1 -add [-AddPath <路径>] [-AddName <名称>] [-AddBranch <分支>] [-NoPush]
+  .\zgit.ps1 -add [<路径>] [-AddName <名称>] [-AddBranch <分支>] [-NoPush]
   .\zgit.ps1 -rm [-Submodule <名/路径>] [-NoPush] [-DryRun]
   .\zgit.ps1 -help
 
@@ -139,7 +140,7 @@ if ($h) {
   -SkipParentPull      配合 -pull 使用，跳过父仓库本身的 git pull，只更新子仓库。
 
 【-add 专用参数】
-  -AddPath <路径>      (别名: -Path, -p) 指定待接入的本地子仓库目录路径（默认取当前目录）。
+  <路径> / -AddPath    (别名: -Path, -p) 指定待接入的本地子仓库目录路径（支持直接传路径或用 -Path/-p，默认取当前目录）。
   -AddName <名称>      (别名: -Name, -n) 指定子模块名称（默认取子仓库目录名）。
   -AddBranch <分支>    (别名: -Branch, -b) 指定跟踪分支（默认取子仓库当前分支）。
   -AddModulePath <路径>指定在父仓库中的相对保存路径。
@@ -148,8 +149,8 @@ if ($h) {
 【常用示例】
   .\zgit.ps1 -pull                             # 一键同步所有子仓库至远程最新
   .\zgit.ps1 -pull -Submodule firmware         # 仅同步 firmware 子仓库
-  .\zgit.ps1 -add -AddPath C:\work\host-app    # 将本地 host-app 接入父仓库（默认识别当前分支）
-  .\zgit.ps1 -add -Path C:\work\host-app -b dev# 将 host-app 接入父仓库并显式指定跟踪 dev 分支
+  .\zgit.ps1 -add C:\work\host-app             # 将本地 host-app 接入父仓库（直接指定路径）
+  .\zgit.ps1 -add C:\work\host-app -b dev      # 将 host-app 接入父仓库并显式指定跟踪 dev 分支
   .\zgit.ps1 -rm -Submodule algorithm          # 解绑 algorithm 子仓库指针（保留本地文件）
   .\zgit.ps1 -rm -Submodule algorithm -DryRun  # 预览解绑执行命令
 
