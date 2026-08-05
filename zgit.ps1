@@ -132,7 +132,8 @@ if ($h) {
    .\zgit.ps1 -pull -SkipParentPull             # 跳过父仓库 git pull，只更新子仓库
 
 2. 注册接入子仓库：
-   .\zgit.ps1 -add C:\work\host-app             # 将本地 host-app 接入父仓库
+   .\zgit.ps1 -add C:\work\host-app             # 将外部子仓库接入父仓库注册
+   .\zgit.ps1 -add 222                          # 将父仓库内已有的子仓库原地注册并推送至远程
    .\zgit.ps1 -add C:\work\host-app -b dev      # 接入并指定跟踪 dev 分支
 
 3. 解绑子仓库指针：
