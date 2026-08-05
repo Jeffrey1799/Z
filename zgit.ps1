@@ -15,8 +15,8 @@
     - 本地分支与远程分叉时不自动 merge / rebase / 强制覆盖，停止并输出人工处理说明。
 
 .PARAMETER Pull
-    显式指定"一键同步"操作：把所有子仓库更新到各自配置分支的远程最新版本。
-    这是脚本的默认行为，也可省略参数直接运行；写出来更清晰（推荐）。
+    一键同步操作：把所有子仓库更新到各自配置分支的远程最新版本。
+    运行本脚本必须显式指定该参数或其它模式参数（如 -Add / -rm / -help）。
 
 .PARAMETER SkipParentPull
     跳过父仓库的 git pull，只同步子仓库（常与 -pull 或默认行为组合使用）。
@@ -50,8 +50,14 @@
     与 -Add 配合：指定父仓库地址（优先级高于脚本顶部的 $ParentRepoUrl 配置）。
     用于覆盖默认配置或测试。
 
+.PARAMETER rm
+    解绑/移除子仓库指针模式（别名 -Rm, -Remove, -Unbind）。
+    仅从父仓库的 Git 跟踪中移除该子仓库指针，并清理 .gitmodules 中的配置。
+    绝对不会删除本地磁盘上的实际文件/代码，也不会影响远程子仓库。
+    必须配合 -Submodule 指定要解绑的子模块名称或路径（例如 -rm -Submodule algorithm）。
+
 .PARAMETER NoPush
-    与 -Add 配合：提交后不推送父仓库远程。
+    与 -Add / -rm 配合：提交后不推送父仓库远程。
 
 .EXAMPLE
     .\zgit.ps1 -pull
@@ -62,6 +68,8 @@
     .\zgit.ps1 -Add -AddPath C:\work\host-app
     .\zgit.ps1 -Add -AddPath C:\work\host-app -NoPush
     .\zgit.ps1 -build   # 同事在自己子仓库目录运行，自动注册进父仓库
+    .\zgit.ps1 -rm -Submodule algorithm
+    .\zgit.ps1 -rm -Submodule host-app,firmware -NoPush
 #>
 [CmdletBinding()]
 param(
@@ -70,12 +78,19 @@ param(
     [string[]]$Submodule = @(),
     [switch]$DryRun,
     [Alias('build')]
-    [switch]$Add,
+    [switch]$add,
+    [Alias('Path', 'p')]
     [string]$AddPath,
+    [Alias('Name', 'n')]
     [string]$AddName,
+    [Alias('Branch', 'b')]
     [string]$AddBranch,
     [string]$AddModulePath,
     [string]$ParentUrl,
+    [Alias('Remove', 'Unbind')]
+    [switch]$rm,
+    [Alias('Help', '?')]
+    [switch]$h,
     [switch]$NoPush
 )
 
@@ -94,6 +109,54 @@ function Write-Step { param([string]$m) Write-Output "==> $m" }
 function Write-Ok   { param([string]$m) Write-Output "    [OK]   $m" }
 function Write-Warn { param([string]$m) Write-Output "    [WARN] $m" }
 function Write-Err  { param([string]$m) Write-Output "    [ERROR] $m" }
+
+if ($h) {
+    Write-Output @"
+================================================================================
+  zgit.ps1 — 多子仓库工作区管理脚本帮助
+================================================================================
+
+【用法格式】
+  .\zgit.ps1 [-pull] [-Submodule <名/路径>] [-SkipParentPull] [-DryRun]
+  .\zgit.ps1 -Add [-AddPath <路径>] [-AddName <名称>] [-AddBranch <分支>] [-NoPush]
+  .\zgit.ps1 -rm -Submodule <名/路径> [-NoPush] [-DryRun]
+  .\zgit.ps1 -help
+
+【核心模式】
+  -pull                一键同步模式（必需显式指定）。将各子仓库同步更新到各自跟踪
+                       分支的远程最新版本，并保持在正常本地分支上。
+  -Add (别名: -build)  接入新子仓库模式。自动读取目标仓库 origin 与当前分支，在
+                       父仓库中注册 Submodule、配置跟踪分支与 ignore=all 并提交。
+  -rm (别名: -Remove)  解绑子仓库模式。仅删除父仓库中对子仓库的 Git 跟踪指针，
+                       【绝对不会删除】本地磁盘中的实际代码文件。
+  -help (别名: -h, -?) 显示本帮助说明。
+
+【通用与可选参数】
+  -Submodule <列表>    指定要操作的目标子仓库名称或路径（支持逗号分隔或多次指定）。
+                       例如：-Submodule host-app,firmware
+  -DryRun              预览模式。显示将要执行的操作，不实际修改工作区或任何 Git 引用。
+  -NoPush              配合 -Add 或 -rm 使用，提交本地变更后跳过 git push 推送。
+  -SkipParentPull      配合 -pull 使用，跳过父仓库本身的 git pull，只更新子仓库。
+
+【-add 专用参数】
+  -AddPath <路径>      (别名: -Path, -p) 指定待接入的本地子仓库目录路径（默认取当前目录）。
+  -AddName <名称>      (别名: -Name, -n) 指定子模块名称（默认取子仓库目录名）。
+  -AddBranch <分支>    (别名: -Branch, -b) 指定跟踪分支（默认取子仓库当前分支）。
+  -AddModulePath <路径>指定在父仓库中的相对保存路径。
+  -ParentUrl <URL>     覆盖脚本顶部的父仓库远程地址。
+
+【常用示例】
+  .\zgit.ps1 -pull                             # 一键同步所有子仓库至远程最新
+  .\zgit.ps1 -pull -Submodule firmware         # 仅同步 firmware 子仓库
+  .\zgit.ps1 -add -AddPath C:\work\host-app    # 将本地 host-app 接入父仓库（默认识别当前分支）
+  .\zgit.ps1 -add -Path C:\work\host-app -b dev# 将 host-app 接入父仓库并显式指定跟踪 dev 分支
+  .\zgit.ps1 -rm -Submodule algorithm          # 解绑 algorithm 子仓库指针（保留本地文件）
+  .\zgit.ps1 -rm -Submodule algorithm -DryRun  # 预览解绑执行命令
+
+================================================================================
+"@
+    exit 0
+}
 
 function Invoke-Git {
     # 执行 git，失败即抛异常
@@ -140,8 +203,8 @@ while ($true) {
     $dir = $parentDir
 }
 
-# ---------- 0.5 添加子仓库模式（-Add / -build） ----------
-if ($Add) {
+# ---------- 0.5 添加子仓库模式（-add / -build） ----------
+if ($add) {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Err '未检测到 Git。请先安装 Git for Windows：https://git-scm.com/download/win'
         exit 1
@@ -331,6 +394,200 @@ if ($Add) {
             if (Test-Path $tmpParent) { Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。" }
         }
     }
+}
+
+# ---------- 0.6 解绑/移除子仓库指针模式（-rm / -Remove / -Unbind） ----------
+if ($rm) {
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Err '未检测到 Git。请先安装 Git for Windows：https://git-scm.com/download/win'
+        exit 1
+    }
+
+    # 自动定位父仓库：优先使用当前目录树内定位的；否则克隆配置的父仓库地址
+    $parent = $null
+    $tmpParent = $null
+    if ($root) {
+        $parent = $root
+        Write-Ok "父仓库（本地定位）: $parent"
+    } elseif ($ParentRepoUrl) {
+        $tmpParent = Join-Path $env:TEMP ("z-parent-" + [guid]::NewGuid().ToString('N'))
+        Write-Step "克隆父仓库到临时目录（$ParentRepoUrl）..."
+        try {
+            Invoke-Git @('clone','--quiet',$ParentRepoUrl,$tmpParent)
+        } catch {
+            Write-Err "克隆父仓库失败：$($_.Exception.Message)"
+            Write-Err '请检查脚本顶部 $ParentRepoUrl 配置，或确认网络与凭据可用。'
+            exit 1
+        }
+        $parent = $tmpParent
+        Write-Ok "父仓库（临时克隆）: $parent"
+    } else {
+        Write-Err '未找到父仓库（当前目录不在父仓库目录树内），且未配置脚本顶部的 $ParentRepoUrl。'
+        Write-Err '两种方式任选其一：'
+        Write-Err '    1) 在父仓库根目录（或其子目录）中运行本脚本；'
+        Write-Err '    2) 在脚本顶部配置 $ParentRepoUrl 为父仓库地址，再在子仓库中运行。'
+        exit 1
+    }
+
+    # 解析目标子模块
+    $subList = $Submodule
+    if (-not $subList -or $subList.Count -eq 0) {
+        # 分发场景：如果在子仓库目录中运行且未传 -Submodule，默认取当前目录名
+        $currLeaf = Split-Path (Get-Location).Path -Leaf
+        & git rev-parse --git-dir 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0 -and $currLeaf) {
+            Write-Warn "未指定 -Submodule，自动尝试使用当前目录名 '$currLeaf' 作为子模块名称。"
+            $subList = @($currLeaf)
+        } else {
+            Write-Err '解绑模式 (-rm) 必须指定目标子模块！'
+            Write-Err '示例：.\zgit.ps1 -rm -Submodule algorithm'
+            Write-Err '      .\zgit.ps1 -rm -Submodule host-app,firmware'
+            exit 1
+        }
+    }
+
+    Push-Location $parent
+    try {
+        # 父仓库干净性检查（本地父仓库场景）
+        if (-not $tmpParent) {
+            $parentStatus = (& git status --porcelain)
+            if ($parentStatus) {
+                Write-Err '父仓库存在未提交的修改，请先处理后再运行（本脚本不会替你提交或还原）：'
+                $parentStatus | ForEach-Object { Write-Err "    $_" }
+                exit 1
+            }
+            $inProgress = Test-InProgressOps $parent
+            if ($inProgress) {
+                Write-Err "父仓库$inProgress，请先手动处理。"
+                exit 1
+            }
+        }
+
+        # 校验并解析目标子模块
+        $targets = @()
+        foreach ($sub in $subList) {
+            # 先用 name 匹配 submodule.<name>.path
+            $pathVal = (& git config -f .gitmodules --get "submodule.$sub.path" 2>$null)
+            $subName = $sub
+            $subPath = $pathVal
+
+            if (-not $pathVal) {
+                # 尝试根据 path 反查 name
+                $allPaths = (& git config -f .gitmodules --get-regexp "^submodule\..*\.path$" 2>$null)
+                foreach ($line in $allPaths) {
+                    if ($line -match '^submodule\.(.+)\.path\s+(.+)$') {
+                        $p = $matches[2].Trim()
+                        if ($p -eq $sub -or $p -eq $sub.TrimEnd('/\')) {
+                            $subName = $matches[1]
+                            $subPath = $p
+                            break
+                        }
+                    }
+                }
+            }
+
+            if (-not $subPath) {
+                Write-Err "子模块 '$sub' 未在父仓库 .gitmodules 中找到相关配置。"
+                exit 1
+            }
+
+            $targets += [PSCustomObject]@{ Name = $subName; Path = $subPath }
+        }
+
+        if ($DryRun) {
+            Write-Output ''
+            Write-Output '========== Dry Run：将执行以下解绑操作（未做任何修改） =========='
+            foreach ($t in $targets) {
+                Write-Output "  [解绑目标] 名称: $($t.Name) | 路径: $($t.Path)"
+                Write-Output "  1. git rm --cached $($t.Path)  (仅删除索引中的指针，完全保留本地磁盘物理文件)"
+                Write-Output "  2. git config -f .gitmodules --remove-section submodule.$($t.Name)"
+                Write-Output "  3. git add .gitmodules"
+                Write-Output "  4. git config --remove-section submodule.$($t.Name)"
+                Write-Output "  5. 清理 .git/modules/$($t.Name)"
+                Write-Output "  6. git commit -m \"chore: unbind submodule $($t.Name) pointer\""
+                if (-not $NoPush) { Write-Output '  7. git push (推送到父仓库远程)' }
+            }
+            Write-Ok 'Dry Run 结束：未执行任何修改。'
+            exit 0
+        }
+
+        foreach ($t in $targets) {
+            $name = $t.Name
+            $mpath = $t.Path
+
+            Write-Step "取消父仓库对子模块 '$name' (路径 '$mpath') 的 Git 指针关联..."
+            try {
+                Invoke-Git @('rm','--cached',$mpath)
+            } catch {
+                Write-Err "git rm --cached 失败：$($_.Exception.Message)"
+                exit 1
+            }
+
+            Write-Step "更新 .gitmodules 配置文件..."
+            & git config -f .gitmodules --remove-section "submodule.$name" 2>$null
+
+            if (Test-Path '.gitmodules') {
+                $content = Get-Content '.gitmodules' -ErrorAction SilentlyContinue
+                if ($content -and $content.Count -gt 0) {
+                    Invoke-Git @('add','.gitmodules')
+                } else {
+                    Invoke-Git @('rm','-f','.gitmodules')
+                }
+            }
+
+            & git config --remove-section "submodule.$name" 2>$null
+            $gitModDir = Join-Path $parent ".git/modules/$name"
+            if (Test-Path $gitModDir) {
+                Remove-Item -Recurse -Force $gitModDir -ErrorAction SilentlyContinue
+            }
+
+            Write-Step "提交解绑变更..."
+            try {
+                Invoke-Git @('commit','-m',"chore: unbind submodule $name pointer")
+            } catch {
+                Write-Err "提交失败：$($_.Exception.Message)"
+                exit 1
+            }
+            Write-Ok "已提交：chore: unbind submodule $name pointer"
+
+            if ($NoPush) {
+                Write-Warn '已指定 -NoPush，未推送父仓库。如需发布：git push'
+            } else {
+                Write-Step '推送解绑变更到父仓库远程...'
+                try {
+                    Invoke-Git @('push')
+                    Write-Ok '已推送到父仓库远程。'
+                } catch {
+                    Write-Err "推送父仓库失败：$($_.Exception.Message)"
+                    Write-Err '最常见原因：您对父仓库没有推送（push）权限。'
+                    exit 1
+                }
+            }
+
+            Write-Output ''
+            Write-Output '========== 解绑完成 =========='
+            Write-Output "已从父仓库彻底解绑子模块 '$name' 的指针。"
+            Write-Output "本地磁盘实际代码文件被完整保留！"
+        }
+        exit 0
+    } finally {
+        Pop-Location
+        if ($tmpParent -and (Test-Path $tmpParent)) {
+            Remove-Item -LiteralPath $tmpParent -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $tmpParent) { Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。" }
+        }
+    }
+}
+
+# ---------- 0.7 校验显式操作模式 ----------
+if (-not $Pull) {
+    Write-Err '未指定操作模式！运行本脚本必须显式传入模式参数（如 -pull / -Add / -rm / -help）。'
+    Write-Err '常用示例：'
+    Write-Err '    .\zgit.ps1 -pull               # 一键同步所有子仓库'
+    Write-Err '    .\zgit.ps1 -Add -AddPath <path> # 接入新子仓库'
+    Write-Err '    .\zgit.ps1 -rm -Submodule <name># 解绑子仓库指针'
+    Write-Err '    .\zgit.ps1 -help               # 查看命令行帮助'
+    exit 1
 }
 
 if (-not $root) {
@@ -595,3 +852,11 @@ try {
 finally {
     Pop-Location
 }
+
+
+
+
+
+
+
+
