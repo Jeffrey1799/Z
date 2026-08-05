@@ -32,22 +32,24 @@ Z/
 ```powershell
 git clone https://github.com/Jeffrey1799/Z.git
 cd Z
-.\zgit.ps1
+.\zgit.ps1 -pull
 ```
 
 ## 日常同步
 
 ```powershell
-.\zgit.ps1
+.\zgit.ps1 -pull
 ```
+
+> `-pull` 是一键同步的显式写法（脚本默认行为，省略参数运行效果相同）。
 
 ## 可选参数
 
 ```powershell
-.\zgit.ps1 -SkipParentPull      # 不拉取父仓库，只同步子仓库
-.\zgit.ps1 -Submodule firmware  # 只同步指定子仓库（名称或路径）
-.\zgit.ps1 -Submodule host-app,firmware  # 同时同步多个
-.\zgit.ps1 -DryRun              # 只显示将要执行的操作，不修改任何内容
+.\zgit.ps1 -pull -SkipParentPull      # 不拉取父仓库，只同步子仓库
+.\zgit.ps1 -pull -Submodule firmware  # 只同步指定子仓库（名称或路径）
+.\zgit.ps1 -pull -Submodule host-app,firmware  # 同时同步多个
+.\zgit.ps1 -pull -DryRun              # 只显示将要执行的操作，不修改任何内容
 .\zgit.ps1 -Add -AddPath C:\work\host-app   # 把本地子仓库注册进父仓库（见下）
 ```
 
@@ -131,7 +133,7 @@ git push
 
 - 普通 `git pull` 只更新父仓库本身，**不会**更新子仓库。
 - `git submodule update --init --recursive` 默认按父仓库记录的**旧指针**更新，不是远程最新版本。
-- 要获得各子仓库指定分支的远程最新版本，**必须**运行 `zgit.ps1`。
+- 要获得各子仓库指定分支的远程最新版本，**必须**运行 `.\zgit.ps1 -pull`。
 - 脚本更新前会检查每个子仓库：只要存在已修改/已暂存/未跟踪文件，或正在 merge/rebase/cherry-pick，就立即停止并明确指出是哪个子仓库，**不会** stash、提交或删除你的修改。
 - 本地分支与远程已分叉时，脚本不自动 merge / rebase / 强制覆盖，会停止并输出人工处理命令。
 - 父仓库不保证历史提交能够恢复当时精确的子仓库版本组合（子仓库指针不会随每次同步写入父仓库）。

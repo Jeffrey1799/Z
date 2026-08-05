@@ -14,8 +14,12 @@
     - 不自动 stash、不自动提交、不删除用户的修改。
     - 本地分支与远程分叉时不自动 merge / rebase / 强制覆盖，停止并输出人工处理说明。
 
+.PARAMETER Pull
+    显式指定"一键同步"操作：把所有子仓库更新到各自配置分支的远程最新版本。
+    这是脚本的默认行为，也可省略参数直接运行；写出来更清晰（推荐）。
+
 .PARAMETER SkipParentPull
-    跳过父仓库的 git pull，只同步子仓库。
+    跳过父仓库的 git pull，只同步子仓库（常与 -pull 或默认行为组合使用）。
 
 .PARAMETER Submodule
     只处理指定名称或路径的子模块。可传多个：-Submodule A,B 或 -Submodule A -Submodule B。
@@ -50,17 +54,18 @@
     与 -Add 配合：提交后不推送父仓库远程。
 
 .EXAMPLE
-    .\zgit.ps1
-    .\zgit.ps1 -SkipParentPull
-    .\zgit.ps1 -Submodule firmware
-    .\zgit.ps1 -Submodule host-app,firmware
-    .\zgit.ps1 -DryRun
+    .\zgit.ps1 -pull
+    .\zgit.ps1 -pull -SkipParentPull
+    .\zgit.ps1 -pull -Submodule firmware
+    .\zgit.ps1 -pull -Submodule host-app,firmware
+    .\zgit.ps1 -pull -DryRun
     .\zgit.ps1 -Add -AddPath C:\work\host-app
     .\zgit.ps1 -Add -AddPath C:\work\host-app -NoPush
     .\zgit.ps1 -build   # 同事在自己子仓库目录运行，自动注册进父仓库
 #>
 [CmdletBinding()]
 param(
+    [switch]$Pull,
     [switch]$SkipParentPull,
     [string[]]$Submodule = @(),
     [switch]$DryRun,
