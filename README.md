@@ -76,7 +76,7 @@ cd Z
 .\zgit.ps1 -add C:\work\host-app
 
 # 或直接指定父仓库内部已有的子仓库目录（原地一键注册并推送远程父仓库）
-.\zgit.ps1 -add 222
+.\zgit.ps1 -add host-app
 ```
 
 - **常用扩展参数**：
