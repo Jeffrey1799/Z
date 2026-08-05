@@ -316,18 +316,27 @@ if ($add) {
             exit 1
         }
         $targetDir = Join-Path $parent $mpath
+        $useForce = $false
         if (Test-Path $targetDir) {
-            $kids = @(Get-ChildItem $targetDir -Force | Where-Object { $_.Name -ne '.git' })
-            if ($kids.Count -gt 0) {
-                Write-Err "父仓库中已存在非空目录 '$mpath'。请先移除，或改用 -AddModulePath 指定其他路径。"
-                exit 1
+            $isSameRepo = ([System.IO.Path]::GetFullPath($src) -eq [System.IO.Path]::GetFullPath($targetDir))
+            $hasGit = (Test-Path (Join-Path $targetDir '.git'))
+            if ($isSameRepo -or $hasGit) {
+                $useForce = $true
+                Write-Ok "检测到目标目录 '$mpath' 为现有 Git 子仓库，将使用 --force 实施原地直接注册。"
+            } else {
+                $kids = @(Get-ChildItem $targetDir -Force | Where-Object { $_.Name -ne '.git' })
+                if ($kids.Count -gt 0) {
+                    Write-Err "父仓库中已存在非空目录 '$mpath'（且非 Git 仓库）。请先移除，或改用 -AddModulePath 指定其他路径。"
+                    exit 1
+                }
             }
         }
 
         if ($DryRun) {
             Write-Output ''
             Write-Output '========== Dry Run：将执行以下操作（未做任何修改） =========='
-            Write-Output "  git submodule add --name $name $url $mpath"
+            $cmdStr = if ($useForce) { "git submodule add --force --name $name $url $mpath" } else { "git submodule add --name $name $url $mpath" }
+            Write-Output "  $cmdStr"
             Write-Output "  git config -f .gitmodules submodule.$name.branch $branch"
             Write-Output "  git config -f .gitmodules submodule.$name.ignore all"
             Write-Output "  git add .gitmodules $mpath"
@@ -339,7 +348,10 @@ if ($add) {
 
         Write-Step "执行 git submodule add（名称 $name，路径 $mpath）..."
         try {
-            Invoke-Git @('submodule','add','--name',$name,$url,$mpath)
+            $addArgs = @('submodule','add')
+            if ($useForce) { $addArgs += '--force' }
+            $addArgs += @('--name',$name,$url,$mpath)
+            Invoke-Git $addArgs
         } catch {
             Write-Err "git submodule add 失败：$($_.Exception.Message)"
             Write-Err '常见原因：URL 无法访问、目录非空、或 git 安全策略禁止该协议。'
