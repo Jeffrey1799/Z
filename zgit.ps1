@@ -391,7 +391,11 @@ if ($add) {
         Pop-Location
         if ($tmpParent -and (Test-Path $tmpParent)) {
             Remove-Item -LiteralPath $tmpParent -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path $tmpParent) { Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。" }
+            if (Test-Path $tmpParent) {
+                Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。"
+            } else {
+                Write-Ok "已安全清理临时父仓库目录：$tmpParent"
+            }
         }
     }
 }
@@ -574,7 +578,11 @@ if ($rm) {
         Pop-Location
         if ($tmpParent -and (Test-Path $tmpParent)) {
             Remove-Item -LiteralPath $tmpParent -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path $tmpParent) { Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。" }
+            if (Test-Path $tmpParent) {
+                Write-Warn "临时父仓库目录 $tmpParent 未能删除，请稍后手动清理。"
+            } else {
+                Write-Ok "已安全清理临时父仓库目录：$tmpParent"
+            }
         }
     }
 }
@@ -852,6 +860,7 @@ try {
 finally {
     Pop-Location
 }
+
 
 
 
