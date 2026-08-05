@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
     一键同步父仓库内所有子仓库到各自配置分支的远程最新版本。
