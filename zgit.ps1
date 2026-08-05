@@ -528,7 +528,10 @@ if ($rm) {
             }
 
             Write-Step "更新 .gitmodules 配置文件..."
-            & git config -f .gitmodules --remove-section "submodule.$name" 2>$null
+            $hasModSection = (& git config -f .gitmodules --get-regexp "^submodule\.$([regex]::Escape($name))\." 2>$null)
+            if ($hasModSection) {
+                & git config -f .gitmodules --remove-section "submodule.$name" 2>$null | Out-Null
+            }
 
             if (Test-Path '.gitmodules') {
                 $content = Get-Content '.gitmodules' -ErrorAction SilentlyContinue
@@ -539,7 +542,10 @@ if ($rm) {
                 }
             }
 
-            & git config --remove-section "submodule.$name" 2>$null
+            $hasLocalSection = (& git config --get-regexp "^submodule\.$([regex]::Escape($name))\." 2>$null)
+            if ($hasLocalSection) {
+                & git config --remove-section "submodule.$name" 2>$null | Out-Null
+            }
             $gitModDir = Join-Path $parent ".git/modules/$name"
             if (Test-Path $gitModDir) {
                 Remove-Item -Recurse -Force $gitModDir -ErrorAction SilentlyContinue
@@ -860,6 +866,7 @@ try {
 finally {
     Pop-Location
 }
+
 
 
 
